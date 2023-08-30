@@ -1,0 +1,149 @@
+server:
+  port: 8000
+  
+spring:
+  application:
+    name: emsapigateway-service
+  rabbitmq:
+    host: 127.0.0.1
+    port: 5672
+    username: guest
+    password: guest 
+    
+  cloud:
+    gateway:
+   
+            
+      routes: # routes 정보를 설정
+      
+  
+        #member-service/로그인_수정, 삭제, 자세히보기
+      - id: member-service
+        uri: lb://MEMBER-SERVICE
+        predicates:
+        - Path=/member-service/member/**
+        - Method= GET, POST, PUT, DELETE
+        filters: #Spring Cloud Gateway에서 요청과 응답을 가로채어 수정함
+        - name: AuthorizationFilter
+          args:
+            role: "ROLE_USER"
+        
+        #member-service/누구나_로그인 회원가입
+      - id: member-service
+        uri: lb://MEMBER-SERVICE
+        predicates:
+        - Path=/member-service/all/**
+        - Method= POST
+        
+        #member-service/누구나_로그인 회원가입
+      - id: member-service
+        uri: lb://MEMBER-SERVICE
+        predicates:
+        - Path=/member-service/**
+        - Method= GET, POST, PUT, DELETE
+        
+       #member-service_관리자(ADMIN)
+      - id: member-service
+        uri: lb://MEMBER-SERVICE
+        predicates:
+        - Path=/member-service/**
+        - Method= GET, POST, PUT, DELETE
+        filters: #Spring Cloud Gateway에서 요청과 응답을 가로채어 수정함
+        - name: AuthorizationFilter
+          args:
+            role: "ROLE_ADMIN"
+
+
+        #member-service/서버상태확인
+      - id: member-service
+        uri: lb://MEMBER-SERVICE
+        predicates:
+        - Path=/member-service/health_check 
+        - Method= POST
+        
+        #member-service/actuator설정, 시크릿키 일괄 변경
+        #/member-service/actuator/busrefresh 식으로 사용.
+      - id: member-service
+        uri: lb://MEMBER-SERVICE
+        predicates:
+        - Path=/member-service/actuator/** 
+        - Method= GET, POST
+        filters: #Spring Cloud Gateway에서 요청과 응답을 가로채어 수정함
+        - RemoveRequestHeader=Cookie #요청하면 리퀘스트 객체가 들어가는데 거기의 쿠키를 삭제함
+        - RewritePath=/member-service/(?<segment>.*),/$\{segment}
+        # 작성방법: 경로 중 일부를 추출(주출할 부분 정규식으로)하여 변경(정규식으로)하여 라우팅함
+        # segment란 URL경로의 구성요소를 말합니다. /member-service/members 에서 첫번째 세그먼트는 member-service, 두번째 members라고 함.
+        # member-service/members의 경로에서 members가 정규식으로 작성되면, 라우팅시 /members만 넘어간다.
+       
+
+
+
+        #reply-service  
+      - id: reply-service #순서 2번
+        uri: lb://REPLY-SERVICE #순서 3번
+        predicates:
+        - Path=/reply-service/**  #순서 1번
+        - Method= GET, POST, PUT, DELETE
+        
+
+        #item-service
+      - id: item-service
+        uri: lb://ITEM-SERVICE
+        predicates:
+        - Path=/item-service/**
+        - Method=GET
+        
+        
+       #item-service_관리자(ADMIN) 
+      - id: item-service
+        uri: lb://ITEM-SERVICE
+        predicates:
+        - Path=/item-service/**
+        - Method=GET,POST,PUT,DELETE
+        filters: #Spring Cloud Gateway에서 요청과 응답을 가로채어 수정함
+        - name: AuthorizationFilter
+          args:
+            role: "ROLE_ADMIN"
+        
+        
+        
+        #order-service
+      - id: order-service
+        uri: lb://ORDER-SERVICE
+        predicates:
+        - Path=/order-service/**
+        - Method= GET, POST, PUT, DELETE 
+        
+      - id: catalog-service #순서 2번
+        uri: lb://CATALOG-SERVICE #순서 3번
+        predicates:
+        - Path=/catalog-service/**  #순서 1번
+        - Method= GET, POST, PUT, DELETE    
+        
+      
+        
+# Spring Cloud에서 Eureka 서비스 디스커버리를 사용하기 위한 설정
+# 유레카서버와 클라이언트의 연동(메인 서버 및 유레카 서버 등록)
+eureka:
+  instance:
+    prefer-ip-address: true # 현재파일(api게이트웨이)의 IP 주소를 우선적으로 등록하도록 설정
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+  client:
+    register-with-eureka: true # Eureka서버에 현재파일(api게이트웨이)를 등록록함
+    fetch-registry: true #Eureka서버의 등록정보를 가져 올지 확인(주기적으로 다른 인스턴스의 데이터를 받아와서 갱신)
+    service-url:
+      defaltZone: http://localhost:8761/eureka #Eureka 클라이언트가 Eureka 서버와 통신할 기본 URL을 설정(Eureka서버로 들록한 포트번호)
+
+
+# 시크릿키를 user-service의 token관련 클래스가 아닌 api게이트웨이이 지정
+data:
+  SECRETE_KEY : emssecretKey
+  
+
+# actuator설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: refresh, health, beans, busrefresh 
+        #refresh서버기능 없이 재가동시켜줌, health 서비가 살았는지, 죽었는지, beans 서버의 bean정보
